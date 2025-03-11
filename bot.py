@@ -2,12 +2,30 @@ import telebot
 import os
 from telebot import types
 import logging
+import sqlite3
 
 bot = telebot.TeleBot('7674701748:AAHGEGtpYtFZmYGYo6px7MzgAHFXLH4QHqI')
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def get_db_connection():
+    conn = sqlite3.connect('bot_database.db')
+    return conn
+
+def create_users_table():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            age INTEGER NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
@@ -51,6 +69,83 @@ def help_command(message):
 # def handle_text(message):
 #     response = f"Вы написали: {message.text}"
 #     bot.send_message(message.chat.id, response)
+
+@bot.message_handler(commands=['create'])
+def create_user(message):
+    msg = bot.reply_to(message, "Введите имя пользователя и возраст через пробел:")
+    bot.register_next_step_handler(msg, process_create_step)
+    
+def process_create_step(message):
+    try:
+        username, age = message.text.split()
+        age = int(age)
+        create_users_table()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, age) VALUES (?, ?)", (username, age))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, "User success create")
+    except Exception as e:
+        bot.reply_to(message, f"Error: {e}")
+
+
+@bot.message_handler(commands=['read'])
+def read_user(message):
+    msg = bot.reply_to(message, "Input name users:")
+    bot.register_next_step_handler(msg, process_read_step)
+    
+def process_read_step(message):
+    try:
+        username = message.text
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        conn.close()
+        if user:
+            bot.reply_to(message, f"User: {user}")
+        else:
+            bot.reply_to(message, "User not found")
+    except Exception as e:
+        bot.reply_to(message, f"Error: {e}")
+
+
+@bot.message_handler(commands=['update'])
+def update_user(message):
+    msg = bot.reply_to(message, "Input name user's and new age, example Aza 20: ")
+    bot.register_next_step_handler(msg, process_update_step)
+    
+def process_update_step(message):
+    try:
+        username, age = message.text.split()
+        age = int(age)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET age = ? WHERE username = ?", (age, username))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, "User successfull added")
+    except Exception as e:
+        bot.reply_to(message, f"Error do: {e}")
+        
+@bot.message_handler(commands=['delete'])
+def delete_user(message):
+    msg = bot.reply_to(message, "Input name users for delete:")
+    bot.register_next_step_handler(msg, process_delete_step)
+    
+def process_delete_step(message):
+    try:
+        username = message.text 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, "User successfull deleted!")
+    except Exception as e:
+        bot.reply_to(message, f"Error do: {e}")
+
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
